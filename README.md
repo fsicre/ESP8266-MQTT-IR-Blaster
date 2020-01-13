@@ -48,4 +48,4 @@ $ mosquitto_sub -h mqtt.local -t ir/receive
 
 ![node-red example](node-red-helpers/node-red-example.png)
 
-see [node-red-helpers](tree/master/src/node-red-helpers)
+see [node-red-helpers](src/node-red-helpers)
