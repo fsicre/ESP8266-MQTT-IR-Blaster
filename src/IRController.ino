@@ -21,12 +21,12 @@ const bool enableOTAServices =  true;                         // Use OTA service
 const unsigned int captureBufSize = 150;                      // Size of the IR capture buffer.
 
 // WEMOS users may need to adjust pins for compatibility
-const int pinr1 = 14;                                         // Receiving pin
-const int pins1 = 4;                                          // Transmitting preset 1
-const int pins2 = 5;                                          // Transmitting preset 2
-const int pins3 = 12;                                         // Transmitting preset 3
-const int pins4 = 13;                                         // Transmitting preset 4
-const int configpin = 10;                                     // Reset Pin
+const int pinr1     = D5;                                         // Receiving pin
+const int pins1     = D2;                                         // Transmitting preset 1
+const int pins2     = D1;                                         // Transmitting preset 2
+const int pins3     = D6;                                         // Transmitting preset 3
+const int pins4     = D7;                                         // Transmitting preset 4
+const int configpin = D4;                                     // Reset Pin
 
 // User settings are above here
 const int ledpin = BUILTIN_LED;                               // Built in LED defined for WEMOS people
