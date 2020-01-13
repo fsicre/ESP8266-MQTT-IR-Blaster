@@ -26,7 +26,7 @@ const int pins1     = D2;                                         // Transmittin
 const int pins2     = D1;                                         // Transmitting preset 2
 const int pins3     = D6;                                         // Transmitting preset 3
 const int pins4     = D7;                                         // Transmitting preset 4
-const int configpin = D4;                                     // Reset Pin
+const int configpin = D4;                                         // Reset Pin
 
 // User settings are above here
 const int ledpin = BUILTIN_LED;                               // Built in LED defined for WEMOS people
@@ -34,8 +34,8 @@ const int ledpin = BUILTIN_LED;                               // Built in LED de
 char mdnsName[128]      = "ir.local";
 
 char mqttServer[128]    = "mqtt.local";
-int  mqttPort           = 1883;
 char mqttPortString[6]  = "1883";
+int  mqttPort           = atoi(mqttPortString);
 char mqttUser[32]       = "";
 char mqttPasswd[32]     = "";
 
@@ -45,8 +45,7 @@ char static_sn[16] = "";
 
 WiFiClient wifi;
 
-const char* MQTT_TOPIC_SUB_SIMPLE = "ir/simple";
-const char* MQTT_TOPIC_SUB_JSON = "ir/json";
+const char* MQTT_TOPIC_SUB = "ir/json";
 const char* MQTT_TOPIC_PUB = "ir/receive";
 PubSubClient * mqtt;
 
@@ -149,9 +148,6 @@ bool processJsonMessage(char* topic, byte* payload, unsigned int length) {
   DynamicJsonDocument root(1024);
   DeserializationError error = deserializeJson(root, payload, length);
 
-  int simple = 0; // TODO voir ce que ça signifie
-  int out = 1; // output pin number
-
   if (error) {
     Serial.println("JSON parsing failed");
     root.clear();
@@ -170,17 +166,20 @@ bool processJsonMessage(char* topic, byte* payload, unsigned int length) {
     String message = "Code sent";
 
     for (int x = 0; x < root.size(); x++) {
-      String type = root[x]["type"];
-      String ip = root[x]["ip"];
-      int rdelay = root[x]["rdelay"];
-      int pulse = root[x]["pulse"];
-      int pdelay = root[x]["pdelay"];
-      int repeat = root[x]["repeat"];
-      int xout = root[x]["out"];
+      JsonObject msg = root[x];
+      // JsonObject msg = root.to<JsonObject>();
+
+      String type = msg["type"];
+      // String ip = msg["ip"];
+      int rdelay = msg["rdelay"];
+      int pulse = msg["pulse"];
+      int pdelay = msg["pdelay"];
+      int repeat = msg["repeat"];
+      int xout = msg["out"];
       if (xout == 0) {
-        xout = out;
+        xout = 1; // default IR emitter
       }
-      int duty = root[x]["duty"];
+      int duty = msg["duty"];
 
       if (pulse <= 0) pulse = 1; // Make sure pulse isn't 0
       if (repeat <= 0) repeat = 1; // Make sure repeat isn't 0
@@ -189,9 +188,9 @@ bool processJsonMessage(char* topic, byte* payload, unsigned int length) {
       if (duty <= 0) duty = 50; // Default duty
 
       // Handle device state limitations on a per JSON object basis
-      String device = root[x]["device"];
+      String device = msg["device"];
       if (device != "null") {
-        int state = root[x]["state"];
+        int state = msg["state"];
         if (deviceState.containsKey(device)) {
           int currentState = deviceState[device];
           if (state == currentState) {
@@ -211,21 +210,21 @@ bool processJsonMessage(char* topic, byte* payload, unsigned int length) {
       if (type == "delay") {
         delay(rdelay);
       } else if (type == "raw") {
-        JsonArray raw = root[x]["data"]; // Array of unsigned int values for the raw signal
-        int khz = root[x]["khz"];
+        JsonArray raw = msg["data"]; // Array of unsigned int values for the raw signal
+        int khz = msg["khz"];
         if (khz <= 0) khz = 38; // Default to 38khz if not set
         rawblast(raw, khz, rdelay, pulse, pdelay, repeat, pickIRsend(xout),duty);
       } else if (type == "pronto") {
-        JsonArray pdata = root[x]["data"]; // Array of values for pronto
+        JsonArray pdata = msg["data"]; // Array of values for pronto
         pronto(pdata, rdelay, pulse, pdelay, repeat, pickIRsend(xout));
       // } else if (type == "roku") {
-      //   String data = root[x]["data"];
+      //   String data = msg["data"];
       //   rokuCommand(ip, data, repeat, rdelay);
       } else {
-        String data = root[x]["data"];
-        String addressString = root[x]["address"];
+        String data = msg["data"];
+        String addressString = msg["address"];
         long address = strtoul(addressString.c_str(), 0, 0);
-        int len = root[x]["length"];
+        int len = msg["length"];
         irblast(type, data, len, rdelay, pulse, pdelay, repeat, address, pickIRsend(xout));
       }
     }
@@ -241,31 +240,8 @@ bool processReceived(decode_results &results) {
     mqtt->publish(MQTT_TOPIC_PUB, buffer, strlen(buffer));
 }
 
-//+=============================================================================
-// First setup of the Wifi.
-// If return true, the Wifi is well connected.
-// Should not return false if Wifi cannot be connected, it will loop
-//
-bool setupWifi(bool resetConf) {
-  // start ticker with 0.5 because we start in AP mode and try to connect
-  ticker.attach(0.5, tick);
-
-  // WiFiManager
-  // Local intialization. Once its business is done, there is no need to keep it around
-  WiFiManager wifiManager;
-
-  // reset settings - for testing
-  if (resetConf) {
-    wifiManager.resetSettings();
-  }
-
-  // set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
-  wifiManager.setAPCallback(configModeCallback);
-  // set config save notify callback
-  wifiManager.setSaveConfigCallback(saveConfigCallback);
-  // reset device if on config portal for greater than 3 minutes
-  wifiManager.setConfigPortalTimeout(180);
-
+bool loadConfig() {
+  Serial.println("Loading config...");
   if (SPIFFS.begin()) {
     Serial.println("mounted file system");
     if (SPIFFS.exists("/config.json")) {
@@ -299,9 +275,69 @@ bool setupWifi(bool resetConf) {
         }
       }
     }
+
+    return true;
   } else {
     Serial.println("failed to mount FS");
+
+    return false;
   }
+}
+
+bool saveConfig() {
+    Serial.println("Saving config...");
+    DynamicJsonDocument json(1024);
+    File configFile = SPIFFS.open("/config.json", "w");
+    if (configFile) {
+      json["mdnsName"] = mdnsName;
+      json["mqttServer"] = mqttServer;
+      json["mqttPortString"] = mqttPortString;
+      json["mqttUser"] = mqttUser;
+      json["mqttPasswd"] = mqttPasswd;
+      // !!! saving dynamic IP ? will become static ?
+      json["ip"] = WiFi.localIP().toString();
+      json["gw"] = WiFi.gatewayIP().toString();
+      json["sn"] = WiFi.subnetMask().toString();
+
+      serializeJson(json, Serial);
+      Serial.println("Writing config file");
+      serializeJson(json, configFile);
+      configFile.close();
+      json.clear();
+      Serial.println("Config written successfully");
+      return true;
+    } else {
+      Serial.println("failed to open config file for writing");
+      return false;
+    }
+}
+
+//+=============================================================================
+// First setup of the Wifi.
+// If return true, the Wifi is well connected.
+// Should not return false if Wifi cannot be connected, it will loop
+//
+bool setupWifi(bool resetConf) {
+  // start ticker with 0.5 because we start in AP mode and try to connect
+  ticker.attach(0.5, tick);
+
+  // WiFiManager
+  // Local intialization. Once its business is done, there is no need to keep it around
+  WiFiManager wifiManager;
+
+  // reset settings - for testing
+  if (resetConf) {
+    wifiManager.resetSettings();
+  }
+
+  // set callback that gets called when connecting to previous WiFi fails, and enters Access Point mode
+  wifiManager.setAPCallback(configModeCallback);
+  // set config save notify callback
+  wifiManager.setSaveConfigCallback(saveConfigCallback);
+  // reset device if on config portal for greater than 3 minutes
+  wifiManager.setConfigPortalTimeout(180);
+
+  loadConfig();
 
   WiFiManagerParameter custom_mdnsName("mdnsName", "mDNS name of this IR Controller", mdnsName, 32);
   wifiManager.addParameter(&custom_mdnsName);
@@ -353,29 +389,7 @@ bool setupWifi(bool resetConf) {
 
   // save the custom parameters to FS
   if (shouldSaveConfig) {
-    Serial.println("Saving config...");
-    DynamicJsonDocument json(1024);
-    json["mdnsName"] = mdnsName;
-    json["mqttServer"] = mqttServer;
-    json["mqttPortString"] = mqttPortString;
-    json["mqttUser"] = mqttUser;
-    json["mqttPasswd"] = mqttPasswd;
-    json["ip"] = WiFi.localIP().toString();
-    json["gw"] = WiFi.gatewayIP().toString();
-    json["sn"] = WiFi.subnetMask().toString();
-
-    File configFile = SPIFFS.open("/config.json", "w");
-    if (!configFile) {
-      Serial.println("failed to open config file for writing");
-    }
-
-    serializeJson(json, Serial);
-    Serial.println("");
-    Serial.println("Writing config file");
-    serializeJson(json, configFile);
-    configFile.close();
-    json.clear();
-    Serial.println("Config written successfully");
+    saveConfig();
   }
 
   ticker.detach();
@@ -386,7 +400,6 @@ bool setupWifi(bool resetConf) {
 }
 
 bool setupMQTT() {
-
   Serial.println("Using MQTT broker " + String(mqttServer));
 
   // MQTT Connect
@@ -415,11 +428,11 @@ bool setupMQTT() {
     }
   }
 
-  if (mqtt->subscribe(MQTT_TOPIC_SUB_JSON)) {
-    Serial.println("Subscribed to " + String(MQTT_TOPIC_SUB_JSON));
+  if (mqtt->subscribe(MQTT_TOPIC_SUB)) {
+    Serial.println("Subscribed to " + String(MQTT_TOPIC_SUB));
     Serial.println("Will publish to " + String(MQTT_TOPIC_PUB));
   } else {
-      Serial.print("Failed to subscribe to " + String(MQTT_TOPIC_SUB_JSON));
+      Serial.print("Failed to subscribe to " + String(MQTT_TOPIC_SUB));
       // reset and try again, or maybe put it to deep sleep
       ESP.reset();
       delay(1000);
@@ -468,9 +481,10 @@ void setup() {
   pinMode(configpin, INPUT_PULLUP);
   Serial.print("Config pin GPIO");
   Serial.print(configpin);
-  Serial.print(" set to: ");
-  Serial.println(digitalRead(configpin));
-  if (!setupWifi(digitalRead(configpin) == LOW)) {
+  Serial.print(" is: ");
+  int configpinSate = digitalRead(configpin);
+  Serial.println(configpinSate ? "HIGH => no reset" : "LOW => reset config");
+  if (!setupWifi(configpinSate == LOW)) {
     return;
   }
 
@@ -745,7 +759,7 @@ String bin2hex(const uint8_t* bin, const int length) {
 // Send IR codes to variety of sources
 //
 void irblast(String type, String dataStr, unsigned int len, int rdelay, int pulse, int pdelay, int repeat, long address, IRsend irsend) {
-  Serial.println("Blasting off");
+  Serial.println("Blasting!");
   type.toLowerCase();
   uint64_t data = strtoull(("0x" + dataStr).c_str(), 0, 0);
   holdReceive = true;
