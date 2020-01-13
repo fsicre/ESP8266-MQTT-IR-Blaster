@@ -159,15 +159,11 @@ bool processJsonMessage(char* topic, byte* payload, unsigned int length) {
     digitalWrite(ledpin, LOW);
     ticker.attach(0.5, disableLed);
 
-    // Handle device state limitations for the global JSON command request
-    // server->hasArg("device") // TODO voir ce que ça signifie
-    // server->hasArg("state") // TODO voir ce que ça signifie
-
     String message = "Code sent";
 
-    for (int x = 0; x < root.size(); x++) {
-      JsonObject msg = root[x];
-      // JsonObject msg = root.to<JsonObject>();
+    // for (int x = 0; x < root.size(); x++) {
+      // JsonObject msg = root[x];
+      JsonObject msg = root.as<JsonObject>();
 
       String type = msg["type"];
       // String ip = msg["ip"];
@@ -196,7 +192,7 @@ bool processJsonMessage(char* topic, byte* payload, unsigned int length) {
           if (state == currentState) {
             Serial.println("Not sending command to " + device + ", already in state " + state);
             message = "Code sent. Some components of the code were held because device was already in appropriate state";
-            continue;
+            // continue;
           } else {
             Serial.println("Setting device " + device + " to state " + state);
             deviceState[device] = state;
@@ -227,17 +223,22 @@ bool processJsonMessage(char* topic, byte* payload, unsigned int length) {
         int len = msg["length"];
         irblast(type, data, len, rdelay, pulse, pdelay, repeat, address, pickIRsend(xout));
       }
-    }
+    // }
 
     root.clear();
   }
 }
 
-bool processReceived(decode_results &results) {
-    char buffer[512] = "TODO";
-    // StaticJsonDocument<256> root;
-    // size_t n = serializeJson(root, buffer);
-    mqtt->publish(MQTT_TOPIC_PUB, buffer, strlen(buffer));
+bool processReceived(decode_results *results) {
+  char buffer[512] = "IR Received! TODO";
+  StaticJsonDocument<256> msg;
+  msg["type"] = encoding(results);
+  msg["data"] = uint64ToString(results->value, 16);
+  msg["length"] = results->bits;
+  size_t n = serializeJson(msg, buffer);
+  mqtt->publish(MQTT_TOPIC_PUB, buffer, strlen(buffer));
+  Serial.println("publishing to " + String(MQTT_TOPIC_PUB));
+  Serial.println(buffer);
 }
 
 bool loadConfig() {
@@ -952,7 +953,7 @@ void loop() {
     irrecv.resume();                                              // Prepare for the next value
     digitalWrite(ledpin, LOW);                                    // Turn on the LED for 0.5 seconds
     ticker.attach(0.5, disableLed);
-    processReceived(results);
+    processReceived(&results);
   }
 
   delay(100);
