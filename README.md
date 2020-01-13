@@ -4,9 +4,11 @@ please see this awesome project [https://github.com/mdhiggins/ESP8266-HTTP-IR-Bl
 
 I'd just removed HTTP / NTP / Alexa stuff et put MQTT inside.
 
-With my Wemos DI this version is far more responsive.
+With my Wemos DI this version is far more responsive than with HTTP / NTP etc. ...
 
-Don't kill your TV with it! ;-)
+But don't kill your TV with it! ;-)
+
+Consider using [node-red](https://nodered.org/) for MQTT-comptabile devices coordination.
 
 # Publish example : blazing fast!
 
@@ -41,3 +43,9 @@ $ mosquitto_sub -h mqtt.local -t ir/receive
 {"type":"NEC","data":"2FD00FF","length":32}
 ^C
 ```
+
+# Node-red example
+
+![node-red example](node-red-helpers/node-red-example.png)
+
+see [node-red-helpers](tree/master/src/node-red-helpers)

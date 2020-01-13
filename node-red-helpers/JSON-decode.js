@@ -1,0 +1,1 @@
+return {payload:JSON.parse(msg.payload)};
