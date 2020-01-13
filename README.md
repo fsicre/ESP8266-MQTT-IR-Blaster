@@ -34,7 +34,7 @@ $ mosquitto_pub -h mqtt.local -t ir/json -m '{"type":"nec","length":32,"data":"2
 
 topic  : ir/receive
 
-using [https://mosquitto.org/man/mosquitto_sub-1.html](mosquitto) :
+using [mosquitto](https://mosquitto.org/man/mosquitto_sub-1.html) :
 ```bash
 $ mosquitto_sub -h mqtt.local -t ir/receive
 {"type":"NEC","data":"2FDD827","length":32}
