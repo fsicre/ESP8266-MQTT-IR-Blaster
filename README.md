@@ -4,25 +4,33 @@ please see this awesome project [https://github.com/mdhiggins/ESP8266-HTTP-IR-Bl
 
 I'd just removed HTTP / NTP / Alexa stuff et put MQTT inside.
 
-# Publish example : pulse wait pulse
+With my Wemos DI this version is far more responsive.
 
-topic  : ir/json
+Don't kill your TV with it! ;-)
+
+# Publish example : blazing fast!
+
+With this project inside, you Wemos D1 or NodeMCU will blast when you publish to your MQTT broker like this :
+
+3 pulses sequence example :
+
+- topic  : ir/json
 payload: {"type":"nec","length":32,"data":"2FD28D7"}
 
-topic  : ir/json
+- topic  : ir/json
 payload: {"type":"delay","rdelay":750}
 
-topic  : ir/json
+- topic  : ir/json
 payload: {"type":"nec","length":32,"data":"2FD28D7"}
 
-using [https://mosquitto.org/man/mosquitto_pub-1.html](mosquitto) :
+using [mosquitto](https://mosquitto.org/man/mosquitto_pub-1.html) :
 ```bash
 $ mosquitto_pub -h mqtt.local -t ir/json -m '{"type":"nec","length":32,"data":"2FD28D7"}'
 $ mosquitto_pub -h mqtt.local -t ir/json -m '{"type":"delay","rdelay":750}'
 $ mosquitto_pub -h mqtt.local -t ir/json -m '{"type":"nec","length":32,"data":"2FD28D7"}'
 ```
 
-# Subscribe example : receiving pulse JSON data
+# Subscribe example : recording pulse JSON data
 
 topic  : ir/receive
 
